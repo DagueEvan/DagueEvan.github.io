@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+canvas {
+    border:1px solid #d3d3d3;
+    background-color: #f1f1f1;
+}
+</style>
+</head>
+<body onload="startGame()">
+<script>
+
+var board = [...Array(7)].map(e => Array(6).fill(0));
+
+function PlayerMovement(event){
+	var x = Math.floor(event.offsetX/100);
+	var ctx = GameArea.context;
+	if(x >= 0 && x < 8){			
+		ctx.clearRect(0,0,700,100)
+		
+		ctx.beginPath();
+		ctx.arc(50+100*x, 50, 50, 0, 2*Math.PI)
+		ctx.fill();
+	}
+}
+function PlayerMove(){
+	var x = Math.floor(event.offsetX/100);
+	
+	if(x >= 0 && x < 8){		
+		var i = 0
+		while(i < 5 && board[x][i+1] == 0){
+			i += 1
+		}
+		if(board[x][0] == 0){
+			board[x][i] = 1
+			
+			var ctx = GameArea.context;
+			ctx.beginPath();
+			ctx.arc(50+100*x, 150+100*i, 50, 0, 2*Math.PI)
+			ctx.fill();
+			
+			RegWinCheck(board, x, 1);
+			
+			document.removeEventListener('mousemove', PlayerMovement);
+			document.removeEventListener('click', PlayerMove);
+			
+			
+			AIMove();
+		}
+	}
+}
+
+
+
+function startGame() {
+    GameArea.start();
+	
+	var ctx = GameArea.context;
+	ctx.fillStyle = "red";
+	
+	document.addEventListener('mousemove', PlayerMovement);
+	document.addEventListener('click', PlayerMove);
+}
+
+var GameArea = {
+	canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = 700;
+        this.canvas.height = 700;
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        this.frameNo = 0;
+		
+		this.context.fillStyle = "blue";
+		this.context.fillRect(0, 100, 700, 600);
+		this.context.fillStyle = "white";
+		for(i = 0; i < 6; i+=1){
+			for(j = 0; j < 7; j+=1){
+				this.context.beginPath();
+				this.context.arc(50+100*j, 100+50+100*i, 50, 0, 2*Math.PI)
+				this.context.fill();
+			}
+		}
+		
+		
+        },
+    clear : function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+}
+
+// create a board state with a move at indicated position. Player = 1 if player move, -1 if AI move
+function CreateBoard(lastBoard, pos, player){
+	var newBoard = [];
+	for(var i = 0; i < lastBoard.length; i+=1){
+		newBoard[i] = lastBoard[i].slice();
+	}
+
+	var i = 0
+	while(i < 5 && newBoard[pos][i+1] == 0){
+		i += 1
+	}
+	newBoard[pos][i] = player
+	
+	return newBoard;
+}
+
+// takes a board state, move position, and player turn (-1 = AI, 1 = player), returns if the move would win the game
+function RegAIWinCheck(boardHolder, pos, turn){
+	// Grab the height of where the piece will be placed.
+	var i = 0;
+	while(boardHolder[pos][i] == 0 && i < 6){
+		i += 1;
+	}
+	
+	// Loop through 
+	for(var j = 0; j < 4; j += 1){
+		var x = pos-j;
+		var y = i-j;
+		
+		// check the horizontal wins if it will be looking in the board
+		if(x >= 0 && x+3 < 7){
+			if(boardHolder[x][i] == turn && boardHolder[x+1][i] == turn && boardHolder[x+2][i] == turn && boardHolder[x+3][i] == turn){
+				return true;
+			}
+			
+			// check the diagonal wins if it will be looking in the board
+			if(y+3 < 6){
+				if(boardHolder[x][y] == turn && boardHolder[x+1][y+1] == turn && boardHolder[x+2][y+2] == turn && boardHolder[x+3][y+3] == turn){
+					return true;
+				}
+			}
+			// check the diagonal wins if it will be looking in the board
+			if(y >= 0){
+				if(boardHolder[x][y] == turn && boardHolder[x+1][y+1] == turn && boardHolder[x+2][y+2] == turn && boardHolder[x+3][y+3] == turn){
+					return true;
+				}
+			}
+		} 
+	}// if the move was not too far down, check the vertical win
+	if(i < 3){
+		if(boardHolder[pos][i] == turn && boardHolder[pos][i+1] == turn && boardHolder[pos][i+2] == turn && boardHolder[pos][i+3] == turn){
+			return true;
+		}
+	}
+
+	
+	// If none of the wins pass, return false
+	return false;
+}
+
+
+// AI functions
+
+// Check a board to estimate what score the board state could be. Takes a board and player, where -1 = player check, 1 = AI check
+function RegAICheck(boardHolder){
+	var score = 0; // holder for score metric.
+	
+	// check all horizontal board states
+	for(var i = 0; i < 6; i+=1){
+		for(var j = 0; j < 3; j+=1){
+			// 4 horizontal spots
+			var c1 = boardHolder[j][5-i];
+			var c2 = boardHolder[j+1][5-i];
+			var c3 = boardHolder[j+2][5-i];
+			var c4 = boardHolder[j+3][5-i];
+		
+			// if all of the positions = 1, the player won.
+			if(c1 == 1 && c2 == 1 && c3 == 1 && c4 == 1){
+				return 1000;
+			} // if all of the positions = -1, the AI won.
+			else if(c1 == -1 && c2 == -1 && c3 == -1 && c4 == -1){
+				return -1000;
+			} // else, make sure the opposing player has no piece in the 4 spots. If not, add the score
+			if(c1 != 1 && c2 != 1 && c3 != 1 && c4 != 1){
+				score -= 2**((c1+c2+c3+c4));
+			}
+			if(c1 != -1 && c2 != -1 && c3 != -1 && c4 != -1){
+				//score += 2**((c1+c2+c3+c4));
+			}
+		}
+	}
+	// check all vertical board states
+	for(var i = 0; i < 3; i+=1){
+		for(var j = 0; j < 7; j+=1){
+			// 4 vertical spots
+			var c1 = boardHolder[j][5-i];
+			var c2 = boardHolder[j][4-i];
+			var c3 = boardHolder[j][3-i];
+			var c4 = boardHolder[j][2-i];
+		
+			// if all of the positions = 1, the player won.
+			if(c1 == 1 && c2 == 1 && c3 == 1 && c4 == 1){
+				return 1000;
+			} // if all of the positions = -1, the AI won.
+			else if(c1 == -1 && c2 == -1 && c3 == -1 && c4 == -1){
+				return -1000;
+			} // else, make sure the opposing player has no piece in the 4 spots. If not, add the score
+			if(c1 != 1 && c2 != 1 && c3 != 1 && c4 != 1){
+				score -= 2**((c1+c2+c3+c4));
+			}
+			if(c1 != -1 && c2 != -1 && c3 != -1 && c4 != -1){
+				//score += 2**((c1+c2+c3+c4));
+			}
+		}
+	}
+	// lastly, check all diagonal states
+	for(var i = 0; i < 5; i+=1){
+		for(var j = 0; j < 3; j+=1){
+			// if i > 2, it's checking right diagonals
+			if(i < 2){
+				var c1 = boardHolder[j][5-i];
+				var c2 = boardHolder[j+1][4-i];
+				var c3 = boardHolder[j+2][3-i];
+				var c4 = boardHolder[j+3][2-i];
+			} // if i >= 2, it's checking left diagonals
+			else{
+				var c1 = boardHolder[j][2-(i-2)];
+				var c2 = boardHolder[j+1][3-(i-2)];
+				var c3 = boardHolder[j+2][4-(i-2)];
+				var c4 = boardHolder[j+3][5-(i-2)];
+			}
+		
+			// if all of the positions = 1, the player won.
+			if(c1 == 1 && c2 == 1 && c3 == 1 && c4 == 1){
+				return 1000;
+			} // if all of the positions = -1, the AI won.
+			else if(c1 == -1 && c2 == -1 && c3 == -1 && c4 == -1){
+				return -1000;
+			} // else, make sure the opposing player has no piece in the 4 spots. If not, add the score
+			if(c1 != 1 && c2 != 1 && c3 != 1 && c4 != 1){
+				score -= 2**((c1+c2+c3+c4));
+			}
+			if(c1 != -1 && c2 != -1 && c3 != -1 && c4 != -1){
+				//score += 2**((c1+c2+c3+c4));
+			}
+		}
+	}
+	
+	
+	return score; // return the overall score obtained
+}
+
+function RegWinCheck(boardHolder, pos, turn){
+	var i = 0;
+	while(boardHolder[pos][i] == 0 && i < 6){
+		i += 1;
+	}	
+	var ctx = GameArea.context;
+
+	// check all horizontal board states
+	for(var i = 0; i < 6; i+=1){
+		for(var j = 0; j < 4; j+=1){
+			// 4 horizontal spots
+			var c1 = boardHolder[j][i];
+			var c2 = boardHolder[j+1][i];
+			var c3 = boardHolder[j+2][i];
+			var c4 = boardHolder[j+3][i];
+			
+			if(c1 == 1 && c2 == 1 && c3 == 1 && c4 == 1){
+				ctx.fillStyle = "black";
+				ctx.beginPath();
+				ctx.moveTo(50+100*j, 150+100*i);
+				ctx.lineTo(50+100*(j+3), 150+100*i);
+				ctx.stroke();
+				
+				return true;
+			} // if all of the positions = -1, the AI won.
+			else if(c1 == -1 && c2 == -1 && c3 == -1 && c4 == -1){
+				ctx.fillStyle = "black";
+				ctx.beginPath();
+				ctx.moveTo(50+100*j, 150+100*i);
+				ctx.lineTo(50+100*(j+3), 150+100*i);
+				ctx.stroke();
+				
+				return true;
+			}
+		}
+	}
+	// check all vertical board states
+	for(var i = 0; i < 4; i+=1){
+		for(var j = 0; j < 7; j+=1){
+			// 4 vertical spots
+			var c1 = boardHolder[j][i];
+			var c2 = boardHolder[j][i+1];
+			var c3 = boardHolder[j][i+2];
+			var c4 = boardHolder[j][i+3];
+		
+			// if all of the positions = 1, the player won.
+			if(c1 == 1 && c2 == 1 && c3 == 1 && c4 == 1){
+				ctx.fillStyle = "black";
+				ctx.beginPath();
+				ctx.moveTo(50+100*j, 150+100*i);
+				ctx.lineTo(50+100*j, 150+100*(i+3));
+				ctx.stroke();
+				
+				return true;
+			} // if all of the positions = -1, the AI won.
+			else if(c1 == -1 && c2 == -1 && c3 == -1 && c4 == -1){
+				ctx.fillStyle = "black";
+				ctx.beginPath();
+				ctx.moveTo(50+100*j, 150+100*i);
+				ctx.lineTo(50+100*j+3, 150+100*(i+3));
+				ctx.stroke();
+				
+				return true;
+			}
+		}
+	}
+	// lastly, check all diagonal states
+	for(var i = 0; i < 6; i+=1){
+		for(var j = 0; j < 4; j+=1){
+			// if i > 2, it's checking right diagonals
+			if(i < 3){
+				var c1 = boardHolder[j][i];
+				var c2 = boardHolder[j+1][i+1];
+				var c3 = boardHolder[j+2][i+2];
+				var c4 = boardHolder[j+3][i+3];
+				
+				// if all of the positions = 1, the player won.
+				if(c1 == 1 && c2 == 1 && c3 == 1 && c4 == 1){
+					ctx.fillStyle = "black";
+					ctx.beginPath();
+					ctx.moveTo(50+100*j, 150+100*i);
+					ctx.lineTo(50+100*(j+3), 150+100*(i+3));
+					ctx.stroke();
+					
+					return true;
+				} // if all of the positions = -1, the AI won.
+				else if(c1 == -1 && c2 == -1 && c3 == -1 && c4 == -1){
+					ctx.fillStyle = "black";
+					ctx.beginPath();
+					ctx.moveTo(50+100*j, 150+100*i);
+					ctx.lineTo(50+100*(j+3), 150+100*(i+3));
+					ctx.stroke();
+					
+					return true;
+				}
+			} // if i >= 2, it's checking left diagonals
+			else{
+				var c1 = boardHolder[j][i];
+				var c2 = boardHolder[j+1][i-1];
+				var c3 = boardHolder[j+2][i-2];
+				var c4 = boardHolder[j+3][i-3];
+				
+				// if all of the positions = 1, the player won.
+				if(c1 == 1 && c2 == 1 && c3 == 1 && c4 == 1){
+					ctx.fillStyle = "black";
+					ctx.beginPath();
+					ctx.moveTo(50+100*j, 150+100*i);
+					ctx.lineTo(50+100*(j+3), 150+100*(i-3));
+					ctx.stroke();
+					
+					return true;
+				} // if all of the positions = -1, the AI won.
+				else if(c1 == -1 && c2 == -1 && c3 == -1 && c4 == -1){
+					ctx.fillStyle = "black";
+					ctx.beginPath();
+					ctx.moveTo(50+100*j, 150+100*i);
+					ctx.lineTo(50+100*(j+3), 150+100*(i-3));
+					ctx.stroke();
+					
+					return true;
+				}
+			}
+		}
+	}
+
+	// if the move was not too far to the right, check the right facing horizontals and digonals
+	if(pos < 4){
+		if(boardHolder[pos][i] == turn && boardHolder[pos+1][i] == turn && boardHolder[pos+2][i] == turn && boardHolder[pos+3][i] == turn){
+			ctx.fillStyle = "black";
+			ctx.beginPath();
+			ctx.moveTo(50+100*pos, 150+100*i);
+			ctx.lineTo(50+100*(pos+3), 150+100*i);
+			ctx.stroke();
+			
+			return true;
+		}
+		if(i < 3){
+			if(boardHolder[pos][i] == turn && boardHolder[pos+1][i+1] == turn && boardHolder[pos+2][i+2] == turn && boardHolder[pos+3][i+3] == turn){
+				ctx.fillStyle = "black";
+				ctx.beginPath();
+				ctx.moveTo(50+100*pos, 150+100*i);
+				ctx.lineTo(50+100*(pos+3), 150+100*(i+3));
+				ctx.stroke();
+				
+				return true;
+			}
+		}
+		if(i > 2){
+			if(boardHolder[pos][i] == turn && boardHolder[pos+1][i-1] == turn && boardHolder[pos+2][i-2] == turn && boardHolder[pos+3][i-3] == turn){
+				ctx.fillStyle = "black";
+				ctx.beginPath();
+				ctx.moveTo(50+100*pos, 150+100*i);
+				ctx.lineTo(50+100*(pos+3), 150+100*(i-3));
+				ctx.stroke();
+				
+				return true;
+			}
+		}
+	}	// if the move was not too far to the right, check the left facing horizontals and digonals
+	if(pos > 2){
+		if(boardHolder[pos][i] == turn && boardHolder[pos-1][i] == turn && boardHolder[pos-2][i] == turn && boardHolder[pos-3][i] == turn){
+			ctx.fillStyle = "black";
+			ctx.beginPath();
+			ctx.moveTo(50+100*pos, 150+100*i);
+			ctx.lineTo(50+100*(pos-3), 150+100*i);
+			ctx.stroke();
+			
+			return true;
+		}
+		if(i < 3){
+			if(boardHolder[pos][i] == turn && boardHolder[pos-1][i+1] == turn && boardHolder[pos-2][i+2] == turn && boardHolder[pos-3][i+3] == turn){
+				ctx.fillStyle = "black";
+				ctx.beginPath();
+				ctx.moveTo(50+100*pos, 150+100*i);
+				ctx.lineTo(50+100*(pos-3), 150+100*(i+3));
+				ctx.stroke();
+				
+				return true;
+			}
+		}
+		if(i > 2){
+			if(boardHolder[pos][i] == turn && boardHolder[pos-1][i-1] == turn && boardHolder[pos-2][i-2] == turn && boardHolder[pos-3][i-3] == turn){
+				ctx.fillStyle = "black";
+				ctx.beginPath();
+				ctx.moveTo(50+100*pos, 150+100*i);
+				ctx.lineTo(50+100*(pos-3), 150+100*(i-3));
+				ctx.stroke();
+				
+				return true;
+			}
+		}
+	}	// if the move was not too far down, check the vertical win
+	if(i < 3){
+		if(boardHolder[pos][i] == turn && boardHolder[pos][i+1] == turn && boardHolder[pos][i+2] == turn && boardHolder[pos][i+3] == turn){
+			ctx.fillStyle = "black";
+			ctx.beginPath();
+			ctx.moveTo(50+100*pos, 150+100*i);
+			ctx.lineTo(50+100*pos, 150+100*(i+3));
+			ctx.stroke();
+				
+			return true;
+		}
+	}
+	
+	// If none of the wins pass, return false
+	return false;
+}
+
+// Regular connect 4 AI with alpha beta pruning.
+// Takes board state, depth, and current max.
+// AI tries to get the lowest score, player gets highest
+// If the best score is ever less than the current max, just return, as the player would not pick this path
+function RegAITurn(boardState, depth, currentMax, start=false){
+	if(depth == 0){
+		return RegAICheck(boardState)
+	}
+	else if(start){
+		var bestScore = 1000;
+		var bestPos = 0;
+		for(var i = 0; i < 7; i+=1){
+			if(boardState[i][0] == 0){			
+				newBoard = CreateBoard(boardState, i, -1);
+				
+				if(RegAIWinCheck(newBoard, i, -1)){
+					return i;
+				}
+				
+				var score = RegAIPlayerTurn(newBoard, depth-1, bestScore);
+				
+				if(score < bestScore){
+					bestScore = score;
+					bestPos = i;
+				}
+			}
+			else if(bestPos == i){
+				bestPos += 1;
+			}
+		}
+		return bestPos;
+	}
+	else{		
+		var bestScore = 1000;
+		for(var i = 0; i < 7; i+=1){
+			if(boardState[i][0] == 0){			
+				newBoard = CreateBoard(boardState, i, -1);
+				
+				if(RegAIWinCheck(newBoard, i, -1)){
+					return -1000;
+				}
+				
+				var score = RegAIPlayerTurn(newBoard, depth-1, bestScore);
+				
+				if(score <= -1000){
+					return -1000;
+				}
+				else if(score < bestScore){
+					bestScore = score;
+				}
+				
+				if(bestScore < currentMax){
+					return bestScore;
+				}
+			}
+		}
+		return bestScore;
+	}
+	
+}
+// Regular connect 4 AI with alpha beta pruning.
+// Takes board state, depth, and current min.
+// AI tries to get the lowest score, player gets highest
+// If the best score is ever greater than the current min, just return, as the AI would not pick this path
+function RegAIPlayerTurn(boardState, depth, currentMin){
+	if(depth == 0){
+		return RegAICheck(boardState)
+	}
+	
+	var bestScore = -1000;
+	for(var i = 0; i < 7; i+=1){
+		if(boardState[i][0] == 0){			
+			newBoard = CreateBoard(boardState, i, 1);
+			
+			if(RegAIWinCheck(newBoard, i, 1)){
+				return 1000
+			}
+			
+			var score = RegAITurn(newBoard, depth-1, bestScore);
+			
+			if(score >= 1000){
+				return 1000
+			}
+			else if(score > bestScore){
+				bestScore = score;
+			}
+			
+			if(bestScore > currentMin){
+				return bestScore;
+			}
+		}
+	}
+	return bestScore;
+}
+
+function AIMove(){
+	var holder = [];
+	for(var i = 0; i < board.length; i+=1){
+		holder[i] = board[i].slice();
+	}
+
+	var x = RegAITurn(holder, 7, -1000, true);
+	
+	var i = 0
+	while(i < 5 && board[x][i+1] == 0){
+		i += 1
+	}
+	
+	board[x][i] = -1
+	
+	var ctx = GameArea.context;
+	ctx.fillStyle = "yellow";
+	ctx.beginPath();
+	ctx.arc(50+100*x, 150+100*i, 50, 0, 2*Math.PI)
+	ctx.fill();
+	
+	RegWinCheck(board, x, -1);
+	
+	ctx.fillStyle = "red";
+	
+	document.addEventListener('mousemove', PlayerMovement);
+	document.addEventListener('click', PlayerMove);
+}
+
+</script>
+<br>
+<h1>To play: Put cursor over board and click wherever you wish to move.</h1>
+</body>
+</html>
